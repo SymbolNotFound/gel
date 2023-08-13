@@ -1,0 +1,18 @@
+# Based on allowlist defined at
+# https://github.com/github/gitignore/blob/main/community/Golang/
+
+# Ignore everything
+*
+
+# except allow this file and go files.
+!/.gitignore
+
+!*.go
+!go.sum
+!go.mod
+
+!README.md
+!LICENSE
+
+# continue matching in subdirectories
+!*/

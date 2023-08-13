@@ -73,7 +73,7 @@ times for priority operations (e.g. ground relations used in player moves).
 AI), as well as game master and lobby interfaces, use to interact.  These are
 defined as a separate repo because some environments do not need an entire GGDL 
 compiler to play (e.g., the game clients that have been code generated from
-rules).  This is not to say that clients should not depend on plugg, but that
+rules).  This is not to say that clients should not depend on `ggdl`, but that
 there are benefits to building clients that only need to depend on the API.
 This repo has no github actions, but has hooks into build and test that check
 for internal consistency.
@@ -122,7 +122,7 @@ targets such as `flutter-client` and `steamvr-client`, which may only need to
 depend on `ggdl-api`, as a reference implementations for clients that target a
 pre-compiled set of game definitions.
 
-* **plugg-bot**: reference implementation for a competitive AI that can play
+* **ggdl-bot**: reference implementation for a competitive AI that can play
 most small games optimally and some large games decently.  Depends on `ggdl-api`
 for joining and playing games, depends on `ggdl/ts` for compiling a game into an
 intermediate representation.  The intent is not to have the most competitive

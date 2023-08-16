@@ -35,7 +35,6 @@ let lexer = moo.compile({
   "|": "|",
   "&": "&",
   "~": "~",
-  "?": "?",
   "(": "(",  ")": ")",
   ",": ",",
   ACTION: "==>",
@@ -44,8 +43,12 @@ let lexer = moo.compile({
     match: /(0|-?[1-9][0-9]*)/,
     value: s => Number(s)
   },
+  VAR: {
+    match: /(?[A-Za-z]|[A-Z])[0-9A-Z_a-z]*/,
+    value: s => (s[0] == "?") ? s[1:] : s
+  },
   IDENT: {
-    match: /[A-Za-z][0-9A-Z_a-z]*/,
+    match: /[a-z][0-9A-Z_a-z]*/,
     type: moo.keywords({
       KEYWORD: [
           'role',
@@ -145,7 +148,7 @@ role_defn -> "role" _ "(" _ name _ ")" {%
 # used to constrain variables to a role type and with `distinct` to separate
 # acting roles from their opponents or their pieces from their opponents'.
 # It typically appears within relations in the body (premises) of an inference.
-role_var -> "role" _ "(" _ "?" name _ ")" {%
+role_var -> "role" _ "(" _ var _ ")" {%
     s => newRoleVar(s[5].name, start(s[0]), end(s[7]))
 %}
 
@@ -284,8 +287,8 @@ name -> %STRING {%
 %}
 
 # A variable has its own namespace and represents a substitution for an atom.
-var -> "?" name {%
-    s => newVar(s[1].name, start(s[0]), s[1].end)
+var -> %VAR {%
+    s => newVar(s[0].value, start(s[0]), end(s[1]))
 %}
 
 # Some productions expect either a var or a name but only a single term.

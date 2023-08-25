@@ -55,9 +55,15 @@ let lexer = moo.compile({
           'init', 'terminal', 'goal',
           'next', 'legal', 'does',
           'distinct', 'true', 'or', 'and', 'not'
-          // GDL-II
+          // sent by Game Manager during play
+          'start',
+          'ready',
+          'play',
+          'stop',
+          'done',
+          // introduced in GDL-II
           'sees', 'random'
-          // GDL-III
+          // introduced in GDL-III
           'knows'
       ]
   })},

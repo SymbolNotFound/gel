@@ -16,7 +16,7 @@
 
 
 @{%
-import "astutil.js";
+import("astutil.js");
 %}
 
 # Enable this to compile to TypeScript instead of JavaScript
@@ -51,7 +51,7 @@ let lexer = moo.compile({
   },
   VAR: {
     match: /(?[A-Za-z]|[A-Z])[0-9A-Z_a-z]*/,
-    value: s => (s[0] == "?") ? s[1:] : s
+    value: s => (s[0] == "?") ? s.slice(1) : s
   },
   IDENT: {
     match: /[a-z][0-9A-Z_a-z]*/,
@@ -70,10 +70,16 @@ let lexer = moo.compile({
           'not',
           'or',
           'distinct',
-          // GDL-II
+          // sent by Game Manager during play
+          'start',
+          'ready',
+          'play',
+          'stop',
+          'done',
+          // introduced in GDL-II
           'sees',
           'random',
-          // GDL-III
+          // introduced in GDL-III
           'knows'
       ]
   })}
@@ -91,13 +97,13 @@ let lexer = moo.compile({
 # definitions for `role`, `input`, `base`, and `init`.
 
 # Multiple sentences.  Note, left-recursion is faster for Earley.
-input -> input _ sentence {% d => [ ...d[0], d[2] ] %}
+input -> input _ sentence {% s => [ ...s[0], s[2] ] %}
 
 # A single remaining sentence with leading spaces.
-input -> _ sentence {% d => [ d[1] ] %}
+input -> _ sentence {% s => [ s[1] ] %}
 
 # Trailing spaces and blank lines.
-input -> input _ {% d => [ ...d[0] ] %}
+input -> input _ {% s => [ ...s[0] ] %}
 
 # A sentence is an object constant or an inference or a ground relation.
 sentence ->
@@ -113,8 +119,13 @@ sentence ->
 
 # An inference consists of a head (the conclusion) and its body (premises),
 # zero or more propositions which &'ed together determine the head's truth.
-inference -> head_relation _ %L_INFER _ body_conjunction {%
-    s => newInference(s[0], s[4], s[0].start, s[4][len(s[4])-1].end)
+inference -> head_relation _ %L_INFER _ body_conjunction
+  {% inference %}
+
+@{%
+function inference(s) {
+    return newInference(s[0], s[4], s[0].start, s[4][len(s[4])-1].end);
+}
 %}
 
 # Only certain game-independent relations will be in the head of an inference.

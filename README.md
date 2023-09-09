@@ -1,4 +1,4 @@
-# GGDL (Graphics &amp; Game Description Language)
+# GGDL (Generative Game Description Language)
 
 In this repo are the parser and compiler implementations:
 

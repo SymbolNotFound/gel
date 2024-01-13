@@ -2,7 +2,7 @@
 
 In this repo are the parser and compiler implementations:
 
-* `go/` GGDL implemented entirely in core golang, with no external dependencies.
+* `src/` GGDL implemented entirely in core golang, with no external dependencies.
 Other repositories within this organization depend on the parsing and compiling
 into a more fluent intermediate representation suitable for traversing and value
 unifying on.

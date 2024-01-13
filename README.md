@@ -11,14 +11,6 @@ unifying on.
 use the golang library unless prefixed by `ts-`.  Most commands for typescript
 build/test/eval are done using `npm build` or `npm install` from within `ts/`.
 
-* `ts/` TypeScript implementation up to GDL, not all of GGDL.  Uses [nearley]
-to generate a parser and its type definitions.  Includes a basic logic database
-implementation in TypeScript and a REPL hosted within a self-contained page.
-Useful within a client for evaluating new and unknown game rules without having
-to be fully compiled for that game, or for iteratively defining a game and its
-interface.
-
-
 ## GGDL and its relation to other General Game Playing environments
 
 This project builds on work done in academia in the field of

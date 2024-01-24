@@ -92,11 +92,8 @@ the backing store for games while they are in progress and is periodically
 synced with the servers running the ggpdojo site.  Game metadata will include
 a `'status'` property indicating whether it should be shown in the index or only
 available to beta testers, etc.
-This has no github actions; part of the release of any component that reads the
-game definitions (e.g. GM, clients), that may block if unable to parse a game
-that has been released and has a stable status.  Making game parsing a submit
-blocker sounds interesting but would be a challenge in this multi-repo setup.
-Maybe with a release binary of the ggdl-check binary?  Will consider it.
+This has no github actions and is mainly a staging area for games which are not
+released yet.
 
 * **ggp-site**: web site frontend for ggpdojo.com and OAuth callback receiver.
 It exposes the interface for viewing current games, creating new ones or joining
@@ -107,32 +104,15 @@ deploy it from, but that dependency is at deployment time, not during build.
 It could be interesting to implement an SPA from within a game description... \
 This repo also has the FrontEnd server's github actions for staging a release.
 
-* **\*-client**: a variety of compilation targets could exist, but the primary
-target will be `vue-client` so that a playable client can be embedded in the
-website alongside the wiki and public match listings.  Next planned are other
-targets such as `flutter-client` and `steamvr-client`, which may only need to
-depend on `ggdl-api`, as a reference implementations for clients that target a
-pre-compiled set of game definitions.
 
-* **ggdl-bot**: reference implementation for a competitive AI that can play
-most small games optimally and some large games decently.  Depends on `ggdl-api`
-for joining and playing games, depends on `ggdl/ts` for compiling a game into an
-intermediate representation.  The intent is not to have the most competitive
-AI player but to accelerate the path for those who want to explore creating one.
-We will spend that time making a more effective tournament space so that the
-best reasoning engine may emerge.
-This repo also has the github actions for staging a release in its cluster.
 
 ## Dependency structure
 
 ```mermaid
 graph LR;
-    ggdl/go-->ggp-db;
-    ggdl/go-->ggdl-gm;
+    ggdl-->ggp-db;
+    ggdl-->ggdl-gm;
     ggp-db--->ggp-site;
-    ggdl-api & ggdl/ts --> ggdl-bot & vue-client;
-    vue-client <-.-> ggp-site;
-    vue-client <-.-> ggdl-gm;
     ggdl-api-->ggdl-gm;
     ggp-games--->ggp-site
 ```

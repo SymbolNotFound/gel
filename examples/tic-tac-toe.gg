@@ -1,0 +1,21 @@
+role x { marker: "X" }
+role o { marker: "O" }
+
+data Marking := "" || "X" || "O"
+
+import { T3Board } from "@boards/tic-tac-toe"
+board := T3Board(Marking)  // markings and blanks are persisted
+
+import { AlternatingTurns } from "@rules/control"
+control := use AlternatingTurns(x, o)
+
+role(?p) @ board[?row, ?col] -> mark(?p.marker)
+    :- board[?row, ?col] == "" and control(?p)
+    ==> board[?row, ?col] = ?p.marker
+
+terminal :- board.line(_)
+terminal :- not board.open
+
+goal(x, 100), goal(o, 0) :- board.line("X")
+goal(x, 50), goal(o, 50) :- not line(_)
+goal(x, 0), goal(o, 100) :- board.line("O")

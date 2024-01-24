@@ -1,15 +1,47 @@
-role left, right { show: Hand }
+// Janken, a.k.a. "Rock-Paper-Scissors" or Roshambo.
+//
+// Perhaps the simplest game I can think of for describing in
+// any GDL variant.  Despite its simplicity, it shows several
+// improvements that GGDL provides for defining relations.
 
-data Hand := ROCK << PAPER << SCISSORS << ROCK
+// Roles may be defined concurrently, and any structured properties
+// on a role are given to all of them independently.
+role left, right { Name^^: string; show: Hand }
 
-init left.show := ROCK
-init right.show := ROCK
+// This line demonstrates the flexibility of defining game-specific
+// properties and the values they may have, including preference ordering.
+// The ordering relationship is shown between the three hand positions,
+// including the fact that it forms a cycle.  UNKNOWN is considered
+// valid, but separate from the rest of the cycle.  Values may share a
+// position in a preference-chain by using |, and values may define a
+// transitive preference order by using <<< instead of <<.  Numeric
+// ranges are also acceptable and will adopt their standard ordering.
 
+data Hand := UNKNOWN; ROCK << PAPER << SCISSORS << ROCK
+
+// Defining an UNKNOWN value allows us to have a more sensible initial value.
+init (
+  left.show := UNKNOWN
+  right.show := UNKNOWN
+)
+
+// Action legality and action consequence are now expressible as a single
+// statement, but the parser can also recognize them as two separate relations,
+// (_ -> _) :- _ to define legality
+// _ ==> _ to define consequence
+//
+// Because we allow UNKNOWN, however, this inference needs to exclude that from
+// the options.  We could instead only define ROCK, PAPER and SCISSORS for Hand
+// and assign an arbitrary initial value (this is what an earlier version did).
 role(?p) -> play(?hand)
-  :- ?hand in Hand
+  :- ?hand in Hand and ?hand <#> UNKNOWN
   ==> ?p.show = ?hand
 
+// Terminal conditions are still inference-based.
 terminal :- left.show =/= right.show
 
+// The goal statement has been shortened and made a symbol (to correspond to the
+// other game-directive statements' operators) and here we take advantage of the
+// comma operator for left-hand side of Datalog inferences -- all are inferred.
 left $= 100, right $= 0 :- left.show >> right.show
 left $= 0, right $= 100 :- left.show << right.show

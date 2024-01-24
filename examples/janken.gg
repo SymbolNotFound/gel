@@ -1,0 +1,15 @@
+role left, right { show: Hand }
+
+data Hand := ROCK << PAPER << SCISSORS << ROCK
+
+init left.show := ROCK
+init right.show := ROCK
+
+role(?p) -> play(?hand)
+  :- ?hand in Hand
+  ==> ?p.show = ?hand
+
+terminal :- left.show =/= right.show
+
+role(?p) $= 100 :- ?p # role(?o) and ?p.show >> ?o.show
+role(?p) $=   0 :- ?p # role(?o) and ?p.show << ?o.show

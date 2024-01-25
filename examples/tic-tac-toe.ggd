@@ -3,7 +3,7 @@ role o { marker: "O" }
 
 data Marking := "" || "X" || "O"
 
-import { T3Board } from "@boards/tic-tac-toe"
+import { T3Board } from "@boards/MNK.ggd"
 board := T3Board(Marking)  // markings and blanks are persisted
 
 import { AlternatingTurns } from "@rules/control"

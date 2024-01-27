@@ -1,21 +1,27 @@
+consult { AlternatingTurns } from "rules/control"
+consult { TicTacToeBoard, BLANK } from "boards/MNK"
+
 role x { marker: "X" }
 role o { marker: "O" }
 
-data Marking := "" || "X" || "O"
+// Represents the symbols that may appear on the board
+data Marking := "X" || "O"
 
-import { T3Board } from "@boards/MNK.ggd"
-board := T3Board(Marking)  // markings and blanks are persisted
+// We can import the behavior of alternating turns (the default is that all
+// players move simultaneously).
+init control := AlternatingTurns(x, o)
 
-import { AlternatingTurns } from "@rules/control"
-control := use AlternatingTurns(x, o)
+// We can import the board characteristics from a library, including the
+// persistence of player markings and blanks.
+init board := new TicTacToeBoard
 
-role(?p) @ board[?row, ?col] -> mark(?p.marker)
-    :- board[?row, ?col] == "" and control(?p)
-    ==> board[?row, ?col] = ?p.marker
+role(?p) @ board[?row, ?col] -> Mark(?p.marker)
+    :- control(?p)
 
-terminal :- board.line(_)
-terminal :- not board.open
+// The game is over when a player forms a line or if no more moves are possible.
+terminal :- board.Line(_)
+terminal :- not board.Open
 
-goal(x, 100), goal(o, 0) :- board.line("X")
-goal(x, 50), goal(o, 50) :- not line(_)
-goal(x, 0), goal(o, 100) :- board.line("O")
+x $= 100, o $= 0 :- board.Line("X")
+x $= 50, o $= 50 :- not board.Line("X") and not board.Line("O")
+x $= 0, o $= 100 :- board.Line("O")

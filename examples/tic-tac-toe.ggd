@@ -1,27 +1,26 @@
 consult { AlternatingTurns } from "rules/control"
-consult { TicTacToeBoard, BLANK } from "boards/MNK"
+consult { TicTacToeBoard } from "boards/MNK"
 
 role x { marker: "X" }
 role o { marker: "O" }
 
-// Represents the symbols that may appear on the board
-data Marking := "X" || "O"
-
-// We can import the behavior of alternating turns (the default is that all
-// players move simultaneously).
-init control := AlternatingTurns(x, o)
+// Enable alternating turns between players (non-playing role plays noop).
+init control := AlternatingTurns(x, o).control
 
 // We can import the board characteristics from a library, including the
 // persistence of player markings and blanks.
-init board := new TicTacToeBoard
+init board := TicTacToeBoard
 
-role(?p) @ board[?row, ?col] -> Mark(?p.marker)
+role(?p) @ board[_, _] -> Mark(?p.marker)
     :- control(?p)
 
 // The game is over when a player forms a line or if no more moves are possible.
 terminal :- board.Line(_)
 terminal :- not board.Open
 
+// Winner takes all, a draw results in 50/50
 x $= 100, o $= 0 :- board.Line("X")
-x $= 50, o $= 50 :- not board.Line("X") and not board.Line("O")
+x $= 50, o $= 50 :- draw
 x $= 0, o $= 100 :- board.Line("O")
+
+draw :- not board.Line("X") and not board.Line("O")

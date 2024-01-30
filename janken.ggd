@@ -1,0 +1,64 @@
+%% Janken, a.k.a. "Rock-Paper-Scissors" or Roshambo.
+%%
+%% Perhaps the simplest game I can think of for describing with
+%% any GDL variant.  Despite its simplicity, here are demonstrated
+%% some improvements that GGDL provides when defining relations.
+
+%% Roles may be defined together, and any structured properties
+%% on a role are given to all of them independently.
+role left, right { show: Hand }
+
+%% The traditional ordering of available hand gestures:
+%% Paper covers rock, scissors cuts paper, rock breaks scissors.
+data Hand := ROCK << PAPER << SCISSORS << ROCK
+
+%% A player chooses one of the hand gestures as their move.
+role(?p) -> play(?hand)
+  :- ?hand in Hand
+  ==> ?p.show = ?hand
+
+%% The game is over when players choose different hands.
+terminal :- left.show =/= right.show
+
+%% Winner-takes-all outcome, preference order is defined by Hand.
+left $= 100, right $= 0 :- left.show >> right.show
+left $= 0, right $= 100 :- left.show << right.show
+
+
+%%
+%% The equivalent game in GDL (human readable format) is a bit more verbose and
+%% repetitive than the above, even for such a small game.
+%%
+%% role(left)
+%% role(right)
+%%
+%% hand(ROCK)
+%% hand(PAPER)
+%% hand(SCISSORS)
+%%
+%% base(show(Role, Hand)) :- role(Role) & hand(Hand)
+%%
+%% input(Role, play(Hand)) :- role(Role) & hand(Hand)
+%% legal(Role, play(Hand)) :- role(Role) & hand(Hand)
+%% next(show(left, Hand)) :- does(left, play(Hand))
+%% next(show(right, Hand)) :- does(right, play(Hand))
+%%
+%% terminal :-
+%%   show(left, Lhand) &
+%%   show(right, Rhand) &
+%%   distinct(Lhand, Rhand)
+%%
+%% goal(left, 100) :- win(left)
+%% goal(left, 0) :- win(right)
+%% goal(right, 100) :- win(right)
+%% goal(right, 0) :- win(left)
+%%
+%% win(Role) :- role(Role) &
+%%   role(Other) & distinct(Role, Other) &
+%%   show(Role, RHand) & show(Other, OHand) &
+%%   better(RHand, OHand)
+%%
+%% better(PAPER, ROCK)
+%% better(SCISSORS, PAPER)
+%% better(ROCK, SCISSORS)
+%%

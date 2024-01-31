@@ -4,23 +4,29 @@ consult { TicTacToeBoard } from "boards/MNK"
 role x { marker: "X" }
 role o { marker: "O" }
 
-// Enable alternating turns between players (non-playing role plays noop).
+%% Enable alternating turns between players (non-playing role plays noop).
 init control := AlternatingTurns(x, o).control
 
-// We can import the board characteristics from a library, including the
-// persistence of player markings and blanks.
+%% We can import the board characteristics from a library, including the
+%% persistence of player markings and blanks.
 init board := TicTacToeBoard
 
+%% A player is allowed to move if it is their turn.
+%% AlternatingTurns provides the control/1 predicate,
+%% it also defines the noop move for the other player.
+%% TicTacToeBoard checks that the board cell is available.
 role(?p) @ board[_, _] -> Mark(?p.marker)
     :- control(?p)
 
-// The game is over when a player forms a line or if no more moves are possible.
+%% The game is over when a player forms a line...
 terminal :- board.Line(_)
+%% ...or if no more moves are possible.
 terminal :- not board.Open
 
-// Winner takes all, a draw results in 50/50
+%% Winner takes all, a draw results in 50/50
 x $= 100, o $= 0 :- board.Line("X")
 x $= 50, o $= 50 :- draw
 x $= 0, o $= 100 :- board.Line("O")
 
+%% Uses NAF (negation as failure) to interpret `not`.
 draw :- not board.Line("X") and not board.Line("O")

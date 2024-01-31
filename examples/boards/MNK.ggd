@@ -1,42 +1,42 @@
-// A collection of M-N-K boards:
-//   Square grids of MxN with an objective of forming a line of K-in-a-row.
-//
-// These boards operate on the principle of making symbolic markings on a grid,
-// each type is typically parameterized by the type of the marking
+%% A collection of M-N-K boards:
+%%   Square grids of MxN with an objective of forming a line of K-in-a-row.
+%%
+%% These boards operate on the principle of making symbolic markings on a grid,
+%% each type is typically parameterized by the type of the marking
 
-// At present, only the Tic-Tac-Toe board is implemented, but the goal is to
-// provide others, as well as the generalization.
-// Since the name of the library should remain the same as this grows, it is
-// using the general term to start with.
+%% At present, only the Tic-Tac-Toe board is implemented, but the goal is to
+%% provide others, as well as the generalization.
+%% Since the name of the library should remain the same as this grows, it is
+%% using the general term to start with.
 
-const BLANK := ""
+%% Defines a three by three surface with BLANK values for each position.
+%% This makes use of the language's list comprehension feature, it would be
+%% equivalent to nine separate lines of `(cell {row} {col} ?blank)` relations.
+surface TicTacToeBoard <=> {[ BLANK | ?row in 1..3, ?col in 1..3 ]} where {
+  const BLANK := ""
 
-// Defines a three by three surface with the indicated default value.
-// This makes use of the language's list comprehension feature, it would be
-// equivalent to nine separate lines of `(cell {x} {y} ?blank)` relations.
-surface TicTacToeBoard <=> {[ BLANK | ?row in 1..3, ?col in 1..3 ]} {
-
-  // The board is considered open (moves are available) if at least one cell is blank.
+  %% The board has available moves if at least one cell is blank.
   Open :- BLANK in {{ @[_, _] }}
 
-  // A valid line may be formed by any row, column or diagonal.
-  Line(?marking) :- row(?marking, ?row)
-  Line(?marking) :- column(?marking, ?col)
+  %% A valid line may be formed by any row, column or diagonal.
+  Line(?marking) :- row(?marking, _)
+  Line(?marking) :- column(?marking, _)
   Line(?marking) :- diagonal(?marking)
 
   let ?cell = @[?row, ?col] {
-    // This is a hook for allowing players/equipment to mark the board at the
-    // indicated (row, col) position, but only if the cell is currently blank.
+    %% This is a hook for allowing players/equipment to mark the board at the
+    %% indicated (row, col) position, but only if the cell is currently blank.
     ?cell -> Mark(?marking)
         :- ?cell === BLANK
         ==> ?cell = ?marking
 
-    // This rule provides persistence for cells that were already marked and for
-    // cells that have not yet been marked.  Consequence without action such as this
-    // can be overridden by conditional rules like the one above.
+    %% This rule provides persistence for cells that were already marked and for
+    %% cells that have not yet been marked.  Consequence without action such as this
+    %% can be overridden by conditional rules like the one above.
     ?cell ==> persist
   }
 
+  %% View relations for defining a line.
   row(?mark, ?row) :- {{ ?mark }} === {{ @[?row, 1..3] }}
   column(?mark, ?col) :- {{ ?mark }} === {{ @[1..3, ?col] }}
   diagonal(?mark) :- {{ ?mark }} === {{ @[1, 1], @[2, 2], @[3, 3] }}

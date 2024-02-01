@@ -12,8 +12,8 @@
 %% Defines a three by three surface with BLANK values for each position.
 %% This makes use of the language's list comprehension feature, it would be
 %% equivalent to nine separate lines of `(cell {row} {col} ?blank)` relations.
-surface TicTacToeBoard <=> {[ BLANK | ?row in 1..3, ?col in 1..3 ]} where {
-  const BLANK := ""
+surface TicTacToeBoard <=> {[ BLANK | \row <- 1..3, \col <- 1..3 ]} where (
+  BLANK <=> ""
 
   %% The board has available moves if at least one cell is blank.
   Open :- BLANK in {{ @[_, _] }}
@@ -41,4 +41,4 @@ surface TicTacToeBoard <=> {[ BLANK | ?row in 1..3, ?col in 1..3 ]} where {
   column(?mark, ?col) :- {{ ?mark }} === {{ @[1..3, ?col] }}
   diagonal(?mark) :- {{ ?mark }} === {{ @[1, 1], @[2, 2], @[3, 3] }}
   diagonal(?mark) :- {{ ?mark }} === {{ @[1, 3], @[2, 2], @[3, 1] }}
-}
+)

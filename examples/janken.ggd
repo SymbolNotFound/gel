@@ -26,8 +26,9 @@ left $= 0, right $= 100 :- left.show << right.show
 
 
 %%
-%% The equivalent game in GDL (human readable format) is a bit more verbose and
-%% repetitive than the above, even for such a small game.
+%% The equivalent game in GDL (human readable format) is
+%% a bit more verbose and repetitive than the above, even
+%% for such a small game.
 %%
 %% role(left)
 %% role(right)

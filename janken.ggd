@@ -13,9 +13,9 @@ role left, right { show: Hand }
 data Hand := ROCK << PAPER << SCISSORS << ROCK
 
 %% A player chooses one of the hand gestures as their move.
-role(?p) -> play(?hand)
-  :- ?hand in Hand
-  ==> ?p.show = ?hand
+?player -> play(?hand)
+  :- ?player in roles and ?hand in Hand
+  ==> ?player.show = ?hand
 
 %% The game is over when players choose different hands.
 terminal :- left.show =/= right.show

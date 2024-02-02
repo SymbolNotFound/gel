@@ -1,0 +1,67 @@
+   # Earley BNF grammar
+
+   This self-documenting grammar is written in a literate style where
+paragraphs of text (such as this one) are ignored by the compiler compiler,
+while production rules like the following are interpreted correctly.  These
+are formatted differently when this file is converted into something more
+presentable such as MarkDown, made possible by the AST which the grammar is
+converted into upon parsing.
+
+input ::= _ grammar _ => \1
+
+   Production rules are defined with `::=` (covered below).  The contents of
+each rule are token matchers or nonterminals which are indexed into a virtual
+list.  The `=>` operator provides a way to define postprocessing on the list
+contents, where each list item is referenced with `\` notation.  Not all items
+being matched are important, such as the optional spacing indicated by `_` in
+this rule.  Sometimes spacing can be explicit and required, as in the rule for
+commentary paragraphs.
+
+comment ::= <SPACE> <SPACE> <SPACE> <UNTIL_NLNL> => { comment: \3 }
+
+   In this way, any block of text that begins with three spaces is considered
+a comment until the next double-newline.  This brings us to tokens (the words
+found between '<' and '>' angle brackets).  They are also defined here but are
+phrased differently from production rules.
+
+token SPACE = /\s/
+token UNTIL_NLNL = /([^\n]+\n)+\n/
+
+   TODO: rest of documentation
+
+grammar ::= production | comment
+grammar ::= grammar _ production => [\0..., \2]
+grammar ::= grammar _ comment => [\0..., \2]
+
+production ::=
+    word _ "::=" _ rules _ <NL> => { name: \0, rules: \4 }
+  | include __ string _ <NL> => { include: \2 }
+
+rules ::= parse_alt
+  | rules _ "|" _ parse_alt => [\0..., \4]
+
+parse_alt ::=
+    rule_expr => { tokens: \0 }
+  | rule_expr _ "=>" _ postproc => { tokens: \0, post: \4 }
+
+rule_expr ::= rule_member
+  | rule_expr _ rule_member => [\0..., \2]
+
+rule_member ::= rule_matcher => \0
+rule_member ::= rule_matcher _ kleene_mod => { ebnf: \0, kleene: \3 }
+
+rule_matcher ::=
+    word => \0
+  | string => \0
+  | "<" word ">" => { token: \1 }
+  | charclass => { match: \0 }
+  | "(" _ rules _ ")" => { subexpr: \2 }
+
+kleene_mod ::= "?" => \0 | "*" => \0 | "+" => \0
+
+word ::= <WORD> => \0
+
+string ::= <STRING> => { literal: \0 }
+
+_ ::= <SPACE>* => []
+__ ::= <SPACE>+ => []

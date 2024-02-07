@@ -1,0 +1,53 @@
+(*   GDL grammar, Human Readable Format   *)
+(*   ==================================   *)
+
+(*
+Language specification and grammar definition for the datalog-inspired GDL
+(Game Description Language) for describing *finite, discrete, deterministic
+multiplayer games of complete information* and extended with GDL-II which adds
+support for nondeterministic behavior and incomplete information.
+
+Some prior knowledge of relational programming, especially datalog, will help
+a lot in understanding this grammar.  Learning a prolog is also helpful, but
+datalog and GDL do not assume the procedural order of search during unification
+that Prolog and other logical languages do, and datalog intentionally leaves
+out certain especially powerful operations for the sake of bounding computation.
+
+Some knowledge of the General Game Playing competition format will also be
+useful, but not necessary, for understanding this grammar.  For the specification
+see [Love08].  The comments here attempt to cover the same information but is
+by necessity organized by similarity in syntax.  It should be noted, however,
+that the academic literature typically uses the KIF formatting as does the GGP
+server implementation in Java, although the client appears to accept both and
+the server is capable of converting from KIF to HRF, most files are formatted
+in KIF.  Fortunately, there is minimal difference between the two (mainly in how
+the 'next' operation and 'distinct' function are represented).
+
+For more details about the format of this file, see the
+[earleybnf.grammar](grammar) found in the same folder.
+
+[Love08]: https://www.cs.uic.edu/~hinrichs/papers/love2006general.pdf
+*)
+
+main ::= main _ sentence => [ \0..., \2 ]
+       | _ sentence => \1
+       | main _ => \0
+
+(* The starting state takes care of leading and trailing spaces, with the
+entire rulesheet composed of sentences and comments.  The syntax does assume
+that there will be at least one valid sentence, and comments (if any present)
+are recognized by the "optional spacing" production rule, `_`. *)
+
+_ ::= epsilon
+    | SPACE => null
+    | SPACE? COMMENT => { comment: \1 }
+
+(* Spacing and comments have rather straightforward definitions, though these
+are inferred as there is no formal definition of acceptable 'space' characters
+in the GDL Specification. *)
+
+SPACE ::= /\s+/m
+
+(* There are only line comments, no block comments, in this grammar. *)
+COMMENT ::= /%+\s*(.*)/ => \1
+

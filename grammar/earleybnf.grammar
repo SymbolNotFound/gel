@@ -1,67 +1,126 @@
-   # Earley BNF grammar
+(*         Earley BNF grammar         *)
+(*         ==================         *)
 
-   This self-documenting grammar is written in a literate style where
+(* This self-documenting grammar is written in a literate style where
 paragraphs of text (such as this one) are ignored by the compiler compiler,
-while production rules like the following are interpreted correctly.  These
-are formatted differently when this file is converted into something more
-presentable such as MarkDown, made possible by the AST which the grammar is
-converted into upon parsing.
+while production rules like the following are interpreted correctly. *)
 
 input ::= _ grammar _ => \1
 
-   Production rules are defined with `::=` (covered below).  The contents of
-each rule are token matchers or nonterminals which are indexed into a virtual
-list.  The `=>` operator provides a way to define postprocessing on the list
-contents, where each list item is referenced with `\` notation.  Not all items
-being matched are important, such as the optional spacing indicated by `_` in
-this rule.  Sometimes spacing can be explicit and required, as in the rule for
-commentary paragraphs.
-
-comment ::= <SPACE> <SPACE> <SPACE> <UNTIL_NLNL> => { comment: \3 }
-
-   In this way, any block of text that begins with three spaces is considered
-a comment until the next double-newline.  This brings us to tokens (the words
-found between '<' and '>' angle brackets).  They are also defined here but are
-phrased differently from production rules.
-
-token SPACE = /\s/
-token UNTIL_NLNL = /([^\n]+\n)+\n/
-
-   TODO: rest of documentation
+(* The first production rule is considered the default start state.  The entire
+grammar consists of production rules like the above or comments (like this
+paragraph); the following is how these alternatives are defined. *)
 
 grammar ::= production | comment
 grammar ::= grammar _ production => [\0..., \2]
 grammar ::= grammar _ comment => [\0..., \2]
 
-production ::=
-    word _ "::=" _ rules _ <NL> => { name: \0, rules: \4 }
-  | include __ string _ <NL> => { include: \2 }
+(* Production rules are defined with `::=` (details below).  The contents of
+each rule are token matchers or nonterminals which are indexed into a virtual
+list.  The `=>` operator provides a way to define postprocessing on the list
+contents, where each list item is referenced with (0-indexed) \-notation. *)
 
-rules ::= parse_alt
-  | rules _ "|" _ parse_alt => [\0..., \4]
+(* Not all items being matched are important, such as the optional spacing
+indicated by the `_` rule.  This grammar includes two convenience rules for
+matching an optional space and matching at-least-one spacing.  The value is
+converted into a null-equivalent so that list-expansion discards them. *)
+
+_ ::= epsilon
+    | _ SPACING => null
+    | _ COMMENT => { comment: \0 }
+
+__ ::= _ SPACING => null
+     | _ COMMENT => {}
+
+SPACING ::= /\s+/m
+
+(* Comment parsing is a little more involved, but still relatively shallow
+compared to other production rules.  We are able to capture it as a token.
+
+COMMENT ::= /\(\*(?:[^*]|\*[^)])*\*\)/m => \1
+
+(* In this way, any block of text that begins with a '(' followed by a '*' will
+be composed as a comment until the next appearance of '*' and ')'.  This rule is
+matched at the tokenizer level as all text between these symbol pairs is thus
+consumed, so it is difficult to spell them out more deliberately here.  Some
+earlier experiments with this format used leading spaces to distinguish prose
+paragraphs from grammar rules, but it created too much additional complexity in
+the grammar definition to be considered worth pursuing.  Instead, this block-
+comment denotation was used, borrowed from the formal definition of EBNF. *)
+
+(* Note that these token rules can also have post processing, where \0 refers
+to the entire pattern, \1 to the first match group, et cetera.  Attempting to
+wrap the post-pattern with a function call will parse but the compiler will then
+not attempt to inline the pattern as a token.  This allows the parser to manage
+only []byte->Token typing, with tokens identified entirely by their rule name
+and a lexer that is typed []byte -> Either({pos: Pos, image: string}, error). *)
+
+(* Tokens may also be represented by string literals provided inline within a
+production rule. The lexer will be given a temporary token with a name that
+matches its image (e.g. new token type in the following rule is "::=": "::="). 
+In this way a token is defined only once even if it is repeated in other rules,
+and there is no added syntactical baggage for defining Token representations
+explicitly except where patterns would be made clearer by naming them. *)
+
+production ::=
+	  word _ "::=" _ rule_body => { name: \0, rules: \4 }
+	| "include" __ STRING      => { include: \2 }
+	| "keyword" __ STRING      => { keyword: \2 }
+
+(* This rounds out the definition of the grammar on the whole, and we can now
+focus on the phrasing of individual production rules.  Note that there are two
+special cases which differ from the primary `name ::= rule_body` and that is
+for including other language (sub-)grammars and for defining keywords. *)
+
+keyword "keyword"
+keyword "include"
+keyword "except"  (* reserved keyword *)
+keyword "epsilon" (* empty transition *)
+keyword "null"    (* special constant *)
+
+(* These instruct the lexer to favor the keyword interpretation for character
+strings which would otherwise match a more general rule.  Without this, it could
+result in unnecessary ambiguity if a term could be misinterpreted as a rule name
+or variable reference. *)
+
+
+(* Grammar rules *)
+(* ------------- *)
+
+
+rule_body ::= parse_alt
+	| rule_body _ "|" _ parse_alt => [\0..., \4]
 
 parse_alt ::=
-    rule_expr => { tokens: \0 }
-  | rule_expr _ "=>" _ postproc => { tokens: \0, post: \4 }
+	  rule_expr => { tokens: \0 }
+	| rule_expr _ "=>" _ postproc => { tokens: \0, post: \4 }
 
 rule_expr ::= rule_member
-  | rule_expr _ rule_member => [\0..., \2]
+	| rule_expr _ rule_member => [\0..., \2]
 
-rule_member ::= rule_matcher => \0
-rule_member ::= rule_matcher _ kleene_mod => { ebnf: \0, kleene: \3 }
+rule_member ::=
+	  rule_matcher => \0
+	| rule_matcher _ kleene_mod => { ebnf: \0, kleene: \3 }
+	| "(" _ rule_matcher _ ")" _ kleene_mod? => { subexpr: \2, kleene: \6 }
+	| "[" _ rule_matcher _ "]" => { subexpr: \2, kleene: "?" }
+	| "{" _ rule_matcher _ "}" => { subexpr: \2, kleene: "*" }
 
 rule_matcher ::=
-    word => \0
-  | string => \0
-  | "<" word ">" => { token: \1 }
-  | charclass => { match: \0 }
-  | "(" _ rules _ ")" => { subexpr: \2 }
+	  WORD      => \0
+	| STRING    => { literal: \0 }
+	| CHARCLASS => { chars: \0 }
+	| PATTERN   => { pattern: \0 }
 
-kleene_mod ::= "?" => \0 | "*" => \0 | "+" => \0
+kleene_mod ::= [?*+] => \0
 
-word ::= <WORD> => \0
 
-string ::= <STRING> => { literal: \0 }
+(* Post-processing *)
+(* --------------- *)
 
-_ ::= <SPACE>* => []
-__ ::= <SPACE>+ => []
+(* Here is where the grammar departs significantly from Extended Backus-Naur
+Form (the real EBNF).  Here we are capable of expressing a post-processing
+transformation in which tokens are selected, rearranged, and given structure. *)
+
+postproc ::= ...
+
+(* Post-processing may construct a list or a dictionary from the ... *)

@@ -1,7 +1,8 @@
 (*   GDL grammar, Human Readable Format   *)
 (*   ==================================   *)
 
-(*
+(* See also [GDL grammar, Knowledge Interchange Format](gdl_kif.grammar).
+
 Language specification and grammar definition for the datalog-inspired GDL
 (Game Description Language) for describing *finite, discrete, deterministic
 multiplayer games of complete information* and extended with GDL-II which adds
@@ -29,8 +30,8 @@ For more details about the format of this file, see the
 [Love08]: https://www.cs.uic.edu/~hinrichs/papers/love2006general.pdf
 *)
 
-main ::= main _ sentence => [ \0..., \2 ]
-       | _ sentence => \1
+main ::= main _ statement => [ \0..., \2 ]
+       | _ statement => \1
        | main _ => \0
 
 (* The starting state takes care of leading and trailing spaces, with the
@@ -51,3 +52,192 @@ SPACE ::= /\s+/m
 (* There are only line comments, no block comments, in this grammar. *)
 COMMENT ::= /%+\s*(.*)/ => \1
 
+(*
+ ## DATALOG with Negation as Failure
+ *)
+
+(* Definition 1. (vocabulary)
+   Datalog consists of relation constants, object constants, and variables. *)
+
+(* A set of relation constants with associated arity. *)
+name ::= /[a-z][A-Z_a-z]*/  (* Arity is determined at relation/sentence. *)
+
+(* A set of object constants. *)
+object ::= name => {
+    ast: "obj",
+    object: \0,
+}
+
+(* A variable is any symbol that starts with a capital letter. *)
+variable ::= /[A-Z][A-Z_a-z]*/ => {
+    ast: "var",
+    variable: \0,
+}
+
+(* Definition 2. (term)
+   A term is a variable or an object constant. *)
+term ::= variable => \0 | object => \0
+
+(* Definition 3. (atomic sentence)
+   A sentence is any relation, including the special relations. *)
+sentence ::=  name _ "(" _ terms _ ")" => {
+    ast: "rel",
+    relation: \0,
+    arity: len(\4),
+    params: \4,
+}
+
+terms ::= term
+    | terms _ "," _ term => [ \0..., \4 ]
+
+(* Definition 4. (literal)
+   A literal is an atomic sentence or the negation of an atomic sentence. *)
+literal ::= sentence | "not" sentence => { ast: "not", not: \1 }
+
+(* Definition 5. (ground expression)
+   An expression is ground iff it contains no variables. *)
+ground_relation ::= name _ "(" _ ground_terms _ ")" => {
+    ast: "rel",
+    ground: true,
+    relation: \0,
+    params: \4,
+}
+
+ground_terms ::= ground_term
+    | ground_terms _ "," _ ground_term => [ \0..., \4 ]
+
+ground_term ::=
+      number => \0
+    | "terminal" => \0
+    | object => \0
+    | ground_relation => \0
+
+(* Definition 6. (Datalog rule)
+   A *datalog rule* is an implication of the form $h :- b_1 & ... & b_n$
+where
+ * h, the head, is an atomic sentence,
+ * each operand $b_i$ of the conjunction in the body is a literal.
+ * [safety]: if a variable appears in the head or in a negative literal, it must
+   appear in a positive literal in the body.
+*)
+inference ::= head_rel _ ":-" _ body_conjunction => {
+    ast: "infer",
+    infer: \0,
+    when: \4,
+}
+
+(* Definitions 7-14. (stratification requirement)
+   In short, each rule has a maximum number of negative terms in any path along
+its dependency relations, including indirect dependencies.  This allows for
+partitioning the rules into strata based on the max # negatives along a path.
+If all inferences are done from low-strata to high-, then you can prove a finite
+model for its semantics.
+*)
+
+(* Definition 15. (recursion restriction)
+   Any rule which has a dependency that creates a cycle with that rule should
+have all parameters of the dependency rule either be a ground term, or be the
+same as a parameter in the head relation, or there be at least one sibling
+dependency that also depends on this term but that does not appear in a cycle
+with the head relation.
+
+   This ensures that functional terms cannot grow to unbounded size by use of
+recursive rules, since terms can only be passed along a recursive cycle without
+adding function symbols, and new terms introduced into recursive cycles must be
+grounded by a finite set of base relation sentences.
+
+   This is not trivial to implement at the syntax/parser level here but it is
+worth noting because it helps us avoid runaway combinators and questions of
+completeness, the restriction aids in constraining the universe of rule sets.
+*)
+
+(* Definition 16. (vocabulary+)
+   The specification notes that GDL adds functions to the set of vocabulary. *)
+function ::= name _ "(" _ terms _ ")" => {
+    ast: "fun",
+    function: \0,
+    params: \4,
+}
+
+(* Definition 17. (terms+)
+   The specification notes that GDL adds function application to allowed terms.
+*)
+term ::= function => \0
+
+(* Definition 18 (rules) notes that the recursion restriction holds on all rules
+   i.e., inferences/implications *)
+
+(* Definition 19 (satisfaction) adds a distinct function, as well as specifying
+the interpretability semantics of GDL. *)
+
+(* Terms t1 and t2 are `distinct` if and only if
+   t1 and t2 are not the same term syntactically. *)
+distinct ::= term _ "#" _ term => {
+    ast: "fun",
+    function: "distinct",
+    params: [ \0, \4 ],
+}
+function ::= distinct => \0
+
+(*
+ ## GDL's predefined relations
+ *)
+
+(* ROLE
+   GDL describes the players of the game through the role relation.
+*)
+
+(* Using an object name as the parameter defines a role having that name. *)
+role_defn ::= "role" _ "(" _ name _ ")" => {
+    ast: "role",
+    name: \4,
+}
+
+(* Roles may also be referenced via variable name using the role relation *)
+role_var ::= "role" _ "(" _ variable _ ")" => {
+    ast: "role_var",
+    name: \4.variable,
+}
+
+(* TRUE, INIT, NEXT *)
+
+(*
+   An atomic sentence using the `true` relation indicates that the relation is
+   true in the current game state.
+*)
+true_function ::= "true" _ "(" _ sentence _ ")" => {
+    ast: "true",
+    params: [ \4 ],
+}
+
+(*
+   An analogue for `true,` indicating what holds for the first game state.
+*)
+init_function ::= "init" _ "(" _ sentence _ ")" => {
+    ast: "init",
+    params: [ \4 ],
+}
+
+(*
+   An analogue for `true,` indicating what holds in the following game state.
+*)
+next_function ::= "next" _ "(" _ sentence _ ")" => {
+    ast: "next",
+    params: [ \4 ],
+}
+
+(* LEGAL
+*)
+
+
+
+
+
+
+
+statement ::=
+      literal   => \0
+    | role_defn => \0
+    | init_rule => \0
+    | base_rule => \0
+    | inference => \0

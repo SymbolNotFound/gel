@@ -52,8 +52,9 @@ SPACE ::= /\s+/m
 (* There are only line comments, no block comments, in this grammar. *)
 COMMENT ::= /%+\s*(.*)/ => \1
 
+
 (*
- ## DATALOG with Negation as Failure
+## DATALOG with Negation as Failure
  *)
 
 (* Definition 1. (vocabulary)
@@ -62,10 +63,27 @@ COMMENT ::= /%+\s*(.*)/ => \1
 (* A set of relation constants with associated arity. *)
 name ::= /[a-z][A-Z_a-z]*/  (* Arity is determined at relation/sentence. *)
 
+(* The following keywords are reserved and should not match with `name`. *)
+keyword "role"
+keyword "init"
+keyword "base"
+keyword "true"
+keyword "next"
+keyword "legal"
+keyword "does"
+keyword "terminal"
+keyword "goal"
+keyword "distinct"
+
 (* A set of object constants. *)
 object ::= name => {
     ast: "obj",
     object: \0,
+}
+
+(* The special object `terminal`. *)
+object ::= "terminal" => {
+   ast: "terminal",
 }
 
 (* A variable is any symbol that starts with a capital letter. *)
@@ -108,7 +126,6 @@ ground_terms ::= ground_term
 
 ground_term ::=
       number => \0
-    | "terminal" => \0
     | object => \0
     | ground_relation => \0
 
@@ -167,8 +184,8 @@ term ::= function => \0
 (* Definition 18 (rules) notes that the recursion restriction holds on all rules
    i.e., inferences/implications *)
 
-(* Definition 19 (satisfaction) adds a distinct function, as well as specifying
-the interpretability semantics of GDL. *)
+(* Definition 19 (satisfaction) adds a `distinct` function, as well as
+specifying the interpretability semantics of GDL. *)
 
 (* Terms t1 and t2 are `distinct` if and only if
    t1 and t2 are not the same term syntactically. *)
@@ -183,17 +200,21 @@ function ::= distinct => \0
  ## GDL's predefined relations
  *)
 
-(* ROLE
-   GDL describes the players of the game through the role relation.
+(* ROLE *)
+(* GDL describes the players of the game through the role relation.
 *)
 
-(* Using an object name as the parameter defines a role having that name. *)
+(*
+   Using an object name as the parameter defines a role having that name.
+*)
 role_defn ::= "role" _ "(" _ name _ ")" => {
     ast: "role",
     name: \4,
 }
 
-(* Roles may also be referenced via variable name using the role relation *)
+(*
+   Roles may also be referenced via variable name using the role relation.
+*)
 role_var ::= "role" _ "(" _ variable _ ")" => {
     ast: "role_var",
     name: \4.variable,
@@ -205,7 +226,7 @@ role_var ::= "role" _ "(" _ variable _ ")" => {
    An atomic sentence using the `true` relation indicates that the relation is
    true in the current game state.
 *)
-true_function ::= "true" _ "(" _ sentence _ ")" => {
+true_relation ::= "true" _ "(" _ sentence _ ")" => {
     ast: "true",
     params: [ \4 ],
 }
@@ -213,7 +234,7 @@ true_function ::= "true" _ "(" _ sentence _ ")" => {
 (*
    An analogue for `true,` indicating what holds for the first game state.
 *)
-init_function ::= "init" _ "(" _ sentence _ ")" => {
+init_relation ::= "init" _ "(" _ sentence _ ")" => {
     ast: "init",
     params: [ \4 ],
 }
@@ -221,16 +242,49 @@ init_function ::= "init" _ "(" _ sentence _ ")" => {
 (*
    An analogue for `true,` indicating what holds in the following game state.
 *)
-next_function ::= "next" _ "(" _ sentence _ ")" => {
+next_relation ::= "next" _ "(" _ sentence _ ")" => {
     ast: "next",
-    params: [ \4 ],
+    next: \4,
 }
 
-(* LEGAL
+(*
+   HRF-formatted GDL has been seen to contain this shorthand for next that
+   allows dependencies and next-effects to be defined in one statement.  The
+   dependences (between "::" and "==>") may have their own side effects also.
 *)
+next_relation ::= sentence _ "::" _ conjunction _ "==>" _ conjunction => {
+   ast: "next"
+   next: \0,
+   deps: \4,
+   effect: \8,
+}
+
+(* LEGAL *)
+
+(*
+   Restricts the allowed inputs to those that satisfy an inference with legal.
+*)
+legal_relation ::= "legal" _ "(" _ term _ "," _ function _ ")" => {
+   ast: "legal",
+   role: \4,
+   action: \8,
+}
+
+(* DOES *)
+
+(*
+   Indicates that the player action did happen this turn.  This is also the
+   format used by the Game Observer to update player knowledge after each turn.
+*)
+does_relation ::= "does" _ "(" _ term _ "," _ function _ ")" => {
+   ast: "does",
+   role: \4,
+   action: \8,
+}
 
 
-
+conjunction ::= literal
+conjunction ::= conjunction _ "&" _ literal => [ \0..., \4 ] 
 
 
 

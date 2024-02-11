@@ -21,20 +21,21 @@ contents, where each list item is referenced with (0-indexed) \-notation. *)
 
 (* Not all items being matched are important, such as the optional spacing
 indicated by the `_` rule.  This grammar includes two convenience rules for
-matching an optional space and matching at-least-one spacing.  The value is
-converted into a null-equivalent so that list-expansion discards them. *)
+matching an optional space and matching at-least-one spacing.  The value for
+matched spacing is ignored, such that the propagated list only contains comment
+nodes, effectively discarding any spacing (including newlines). *)
 
 _ ::= __?
 
-__ ::= _ SPACING => []
-     | _ COMMENT => { comment: \1 }
+__ ::= __? SPACING => [ \0... ]
+     | __? COMMENT => [ \0..., { comment: \1 } ]
 
 SPACING ::= /\s+/m
 
 (* Comment parsing is a little more involved, but still relatively shallow
 compared to other production rules.  We are able to capture it as a token.
 
-COMMENT ::= /\(\*([^*]+|\*[^)])*\*\)/m => \1
+COMMENT ::= /\(\*([^*]+|\*+[^)])*\*+\)/m => \1
 
 (* In this way, any block of text that begins with a '(' followed by a '*' will
 be composed as a comment until the next appearance of '*' and ')'.  This rule is
@@ -75,8 +76,6 @@ for including other language (sub-)grammars and for defining keywords. *)
 keyword "keyword"
 keyword "include"
 keyword "except"  (* reserved keyword *)
-keyword "epsilon" (* empty transition *)
-keyword "null"    (* special constant *)
 
 (* These instruct the lexer to favor the keyword interpretation for character
 strings which would otherwise match a more general rule.  Without this, it could
@@ -142,7 +141,7 @@ WORD ::= /[A-Z_a-z][A-Z_a-z0-9]*/
 
 (* Capture all characters between double-quotes.
 *)
-STRING ::= /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\\n])*"/ => \1
+STRING ::= /"(\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\\n])*"/ => \1
 
 (* Capture a range of characters and character instances within a common class.
 *)

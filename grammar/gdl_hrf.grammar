@@ -30,6 +30,11 @@ For more details about the format of this file, see the
 [Love08]: https://www.cs.uic.edu/~hinrichs/papers/love2006general.pdf
 *)
 
+(*
+   The first rule is the default start state,
+   this parses an entire file or block of code.
+ *)
+
 main ::= main _ statement => [ \0..., \2 ]
        | _ statement => \1
        | main _ => \0
@@ -99,7 +104,7 @@ term ::= variable => \0 | object => \0
 (* Definition 3. (atomic sentence)
    A sentence is any relation, including the special relations. *)
 sentence ::=  name _ "(" _ terms _ ")" => {
-    ast: "rel",
+    ast: "relation",
     relation: \0,
     arity: len(\4),
     params: \4,
@@ -110,7 +115,7 @@ terms ::= term
 
 (* Definition 4. (literal)
    A literal is an atomic sentence or the negation of an atomic sentence. *)
-literal ::= sentence | "not" sentence => { ast: "not", not: \1 }
+literal ::= sentence | "~" _ sentence => { ast: "not", not: \2 }
 
 (* Definition 5. (ground expression)
    An expression is ground iff it contains no variables. *)
@@ -137,15 +142,21 @@ where
  * [safety]: if a variable appears in the head or in a negative literal, it must
    appear in a positive literal in the body.
 *)
-inference ::= head_rel _ ":-" _ body_conjunction => {
+inference ::= head_rel _ ":-" _ conjunction => {
     ast: "infer",
     infer: \0,
-    when: \4,
+    evidence: \4,
 }
 
+(* The body of an inference may be a single literal or a cunjuction of literals.
+*)
+conjunction ::= literal
+conjunction ::= conjunction _ "&" _ literal => [ \0..., \4 ] 
+
 (* Definitions 7-14. (stratification requirement)
-   In short, each rule has a maximum number of negative terms in any path along
-its dependency relations, including indirect dependencies.  This allows for
+   Refer to [Love08] for more details about datalog stratification definitions.
+In short, each rule has a maximum number of negative terms in any path along its
+dependency relations, including indirect dependencies.  This allows for
 partitioning the rules into strata based on the max # negatives along a path.
 If all inferences are done from low-strata to high-, then you can prove a finite
 model for its semantics.
@@ -164,12 +175,12 @@ adding function symbols, and new terms introduced into recursive cycles must be
 grounded by a finite set of base relation sentences.
 
    This is not trivial to implement at the syntax/parser level here but it is
-worth noting because it helps us avoid runaway combinators and questions of
-completeness, the restriction aids in constraining the universe of rule sets.
+worth noting because it helps in avoiding runaway combinators and questions of
+completeness; this restriction aids in constraining the universe of rule sets.
 *)
 
 (* Definition 16. (vocabulary+)
-   The specification notes that GDL adds functions to the set of vocabulary. *)
+   The specification notes that GDL adds *functions* to the set of vocabulary. *)
 function ::= name _ "(" _ terms _ ")" => {
     ast: "fun",
     function: \0,
@@ -282,16 +293,28 @@ does_relation ::= "does" _ "(" _ term _ "," _ function _ ")" => {
    action: \8,
 }
 
+(* SEES *)
 
-conjunction ::= literal
-conjunction ::= conjunction _ "&" _ literal => [ \0..., \4 ] 
+(*
+   Indicates that the player is made aware of a game object/relation.
+   TODO is the argument to sees allowed to be negative? (i.e., literal or sentence here?)
+*)
+sees_relation ::= "sees" _ "(" _ term _ "," _ literal _ ")" => {
+   ast: "sees",
+   role: \4,
+   fact: \8,
+}
 
+(*
+   Top-level statements.
 
+   The grammar is composed of a set of the following global-scope relations.
+Note that sentences are not negated (that would be the `literal` production),
+and that there is no required order for init/base/role relations wihtin a file.
+*)
 
-
-statement ::=
-      literal   => \0
-    | role_defn => \0
-    | init_rule => \0
-    | base_rule => \0
-    | inference => \0
+statement ::= sentence  => \0
+            | role_defn => \0
+            | init_rule => \0
+            | base_rule => \0
+            | inference => \0

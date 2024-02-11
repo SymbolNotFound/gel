@@ -9,11 +9,10 @@ input ::= _ grammar _ => \1
 
 (* The first production rule is considered the default start state.  The entire
 grammar consists of production rules like the above or comments (like this
-paragraph); the following is how these alternatives are defined. *)
+paragraph).  The following is how these alternatives are defined. *)
 
-grammar ::= production | comment
+grammar ::= production
 grammar ::= grammar _ production => [\0..., \2]
-grammar ::= grammar _ comment => [\0..., \2]
 
 (* Production rules are defined with `::=` (details below).  The contents of
 each rule are token matchers or nonterminals which are indexed into a virtual
@@ -25,19 +24,17 @@ indicated by the `_` rule.  This grammar includes two convenience rules for
 matching an optional space and matching at-least-one spacing.  The value is
 converted into a null-equivalent so that list-expansion discards them. *)
 
-_ ::= epsilon
-    | _ SPACING => null
-    | _ COMMENT => { comment: \0 }
+_ ::= __?
 
-__ ::= _ SPACING => null
-     | _ COMMENT => {}
+__ ::= _ SPACING => []
+     | _ COMMENT => { comment: \1 }
 
 SPACING ::= /\s+/m
 
 (* Comment parsing is a little more involved, but still relatively shallow
 compared to other production rules.  We are able to capture it as a token.
 
-COMMENT ::= /\(\*(?:[^*]|\*[^)])*\*\)/m => \1
+COMMENT ::= /\(\*([^*]+|\*[^)])*\*\)/m => \1
 
 (* In this way, any block of text that begins with a '(' followed by a '*' will
 be composed as a comment until the next appearance of '*' and ')'.  This rule is
@@ -48,12 +45,15 @@ paragraphs from grammar rules, but it created too much additional complexity in
 the grammar definition to be considered worth pursuing.  Instead, this block-
 comment denotation was used, borrowed from the formal definition of EBNF. *)
 
-(* Note that these token rules can also have post processing, where \0 refers
-to the entire pattern, \1 to the first match group, et cetera.  Attempting to
-wrap the post-pattern with a function call will parse but the compiler will then
-not attempt to inline the pattern as a token.  This allows the parser to manage
-only []byte->Token typing, with tokens identified entirely by their rule name
-and a lexer that is typed []byte -> Either({pos: Pos, image: string}, error). *)
+(* Note that these token rules can also have post processing, similar to the
+production rules, whereby \0 refers to the entire pattern, \1 to the first match
+group, \2 the second match group, et cetera.  To make things consistent for
+post-processing, match patterns like this always appear on their own, and any
+postprocessing should always emit a string (or list of bytes equivalent).  The
+grammar restricts this isolation of pattern definitions, but it's feasible the
+grammar could be extended to use positional dependence on inlined patterns (like
+\2.3 for the third match group of the second earley set) but thus far I have not
+seen a need for it. *)
 
 (* Tokens may also be represented by string literals provided inline within a
 production rule. The lexer will be given a temporary token with a name that
@@ -63,9 +63,9 @@ and there is no added syntactical baggage for defining Token representations
 explicitly except where patterns would be made clearer by naming them. *)
 
 production ::=
-	  word _ "::=" _ rule_body => { name: \0, rules: \4 }
-	| "include" __ STRING      => { include: \2 }
-	| "keyword" __ STRING      => { keyword: \2 }
+	  WORD _ "::=" _ rule_body   => { name: \0, def: \4 }
+	| "include" __ STRING        => { include: \2 }
+	| "keyword" __ STRING        => { keyword: \2 }
 
 (* This rounds out the definition of the grammar on the whole, and we can now
 focus on the phrasing of individual production rules.  Note that there are two
@@ -87,17 +87,32 @@ or variable reference. *)
 (* Grammar rules *)
 (* ------------- *)
 
+(*
+   As mentioned above, a rule body may be just a pattern (indicating a token
+is expected from post-processing transforms as well).
+*)
+rule_body ::= pattern _ postproc_ref => { pattern: \0, post; \4 }
 
+(* Otherwise, a rule body is one or more alternatives,
+each a string, character class or reference to another production rule.
+*)
 rule_body ::= parse_alt
 	| rule_body _ "|" _ parse_alt => [\0..., \4]
 
+(* Each alternative is either a sequence of token expressions by itself or with
+additional post-processing when the '=>' operator is present.
+*)
 parse_alt ::=
 	  rule_expr => { tokens: \0 }
 	| rule_expr _ "=>" _ postproc => { tokens: \0, post: \4 }
 
+(* Token sequencing is simple concatenation.
+*)
 rule_expr ::= rule_member
 	| rule_expr _ rule_member => [\0..., \2]
 
+(* Each token representation may be a matcher or group or special Kleene group.
+*)
 rule_member ::=
 	  rule_matcher => \0
 	| rule_matcher _ kleene_mod => { ebnf: \0, kleene: \3 }
@@ -105,13 +120,33 @@ rule_member ::=
 	| "[" _ rule_matcher _ "]" => { subexpr: \2, kleene: "?" }
 	| "{" _ rule_matcher _ "}" => { subexpr: \2, kleene: "*" }
 
+(* Any word (symbolic name) is a reference to another rule in the grammar.
+There may be a literal string for seldom used tokens such as certain symbols
+and keywords, and the tokenizer will be informed about these and the character
+classes.  Anything needing a regular expression should be defined as a rule by
+itself, especially if a subgroup of the pattern is being projected from it.
+*)
 rule_matcher ::=
 	  WORD      => \0
 	| STRING    => { literal: \0 }
-	| CHARCLASS => { chars: \0 }
-	| PATTERN   => { pattern: \0 }
+	| CHARCLASS => { charset: \0 }
 
+(* Groups may be 0-1, 0-or-more, or 1-or-more, expressed via Kleene symbols.
+*)
 kleene_mod ::= [?*+] => \0
+
+(* A word may contain any alphanumeric characters but must begin with a letter
+or the underscore.  It may even consist of only underscores or only one letter.
+*)
+WORD ::= /[A-Z_a-z][A-Z_a-z0-9]*/
+
+(* Capture all characters between double-quotes.
+*)
+STRING ::= /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\\n])*"/ => \1
+
+(* Capture a range of characters and character instances within a common class.
+*)
+CHARCLASS ::= /\[(?:\\.|[^\\\n])+?\]/
 
 
 (* Post-processing *)
@@ -121,6 +156,50 @@ kleene_mod ::= [?*+] => \0
 Form (the real EBNF).  Here we are capable of expressing a post-processing
 transformation in which tokens are selected, rearranged, and given structure. *)
 
-postproc ::= ...
+(*
+If no postprocessing is given, it is equivalent to [ \0 ] (or expanded to fit).
+For pattern tokens, the default is \0; the pattern match as a string not a list.
+*)
+postproc ::= postproc_ref  => \0
+           | postproc_list => \0
+           | postproc_dict => \0
 
-(* Post-processing may construct a list or a dictionary from the ... *)
+(*
+   The simplest post-processing is a single reference to a positional element.
+In the case of token patterns this is the only valid postprocessing expression.
+*)
+postproc_ref ::= "\\" NUMBER => { proj_item: \1 }
+
+(*
+   Numbers are always positive integers, or zero.  To avoid confusion with octal
+values in other languages, and to avoid unnecessary leading zeroes, this pattern
+is especially specific about which digit strings are allowed.
+*)
+NUMBER ::= /0|[1-9][0-9]*/
+
+(*
+   Post-processing may construct a list or a dictionary from the spec given,
+with a list able to expand the contents of another list (and a sufficiently
+good compiler will see this for the append-to-slice operation that it is...).
+*)
+postproc_list ::= "[" _ postproc_items _ "]" => { proj_list: \2 }
+
+postproc_items ::= postproc_item
+postproc_items ::= postproc_items _ "," _ postproc_item => [ \0..., \4 ]
+
+postproc_item ::= postproc_ref  => \0
+                | postproc_ref "..." => { expand_list: \0 }
+                | postproc_list => \0
+                | postproc_dict => \0
+
+(*
+A dict may have any name for its key and may have literals or any valid postproc
+for its value.  We emit a self-describing dictionary of (key, value) pairs which
+describe how to construct the dictionary.
+*)
+postproc_dict ::= "{" _ postproc_keyvals _ ","? _ "}" => { proj_dict: \2 }
+
+postproc_keyvals ::= postproc_kv
+postproc_keyvals ::= postproc_keyvals _ "," _ postproc_kv => [ \0..., \4 ]
+
+postproc_kv ::= word _ ":" _ postproc

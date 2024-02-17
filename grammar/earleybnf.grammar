@@ -28,7 +28,7 @@ nodes, effectively discarding any spacing (including newlines). *)
 _ ::= __? => [ \0... ]
 
 __ ::= __? SPACING => [ \0... ]
-     | __? COMMENT => [ \0..., { comment: \1 } ]
+     | __? COMMENT => [ \0..., Comment{ text: \1 } ]
 
 SPACING ::= /\s+/m
 
@@ -64,8 +64,8 @@ and there is no added syntactical baggage for defining Token representations
 explicitly except where terminals would be made clearer by naming them. *)
 
 production ::=
-	  WORD _ "::=" _ pattern_body => { name: \0, \4... }
-	| WORD _ "::=" _ rule_body    => { name: \0, parse: \4 }
+	  WORD _ "::=" _ pattern_body => Pattern{ name: \0, \4... }
+	| WORD _ "::=" _ rule_body    => Rule{ name: \0, tokens: \4 }
 
 (* This rounds out the definition of the grammar on the whole, and we can now
 focus on the phrasing of individual production rules.  One semantic detail, if a
@@ -82,8 +82,8 @@ to match the typing as a token. *)
 is expected from post-processing transforms as well).
 *)
 pattern_body ::=
-    PATTERN => { pattern: \0 }
-  | PATTERN _ "=>" _ postproc_ref => { pattern: \0, post: \4 }
+    PATTERN => Matcher{ pattern: \0 }
+  | PATTERN _ "=>" _ postproc_ref => Matcher{ pattern: \0, post: \4 }
 
 (* The pattern is phrased between forward-slash characters '/' and must occupy
 only one line.
@@ -111,11 +111,9 @@ rule_expr ::= rule_atom
 (* Each token representation may be a matcher or group or special Kleene group.
 *)
 rule_atom ::=
-	  rule_matcher => \0
-	| rule_matcher kleene_mod => { ebnf: \0, kleene: \1 }
-	| "(" _ rule_expr _ ")" _ kleene_mod? => { subexpr: \2, kleene: \6 }
-	| "[" _ rule_expr _ "]" => { subexpr: \2, kleene: "?" }
-	| "{" _ rule_expr _ "}" => { subexpr: \2, kleene: "*" }
+	  rule_matcher => Term{ match: \0 }
+	| rule_matcher kleene_mod => Term{ match: \0, kleene: \1 }
+	| "(" _ rule_expr _ ")" _ kleene_mod? => Subexpr{ match: \2, kleene: \6 }
 
 (* Any word (symbolic name) is a reference to another rule in the grammar.
 There may be a literal string for seldom used tokens such as certain symbols
@@ -124,12 +122,11 @@ classes.  Anything needing a regular expression should be defined as a rule by
 itself, especially if a subgroup of the pattern is being projected from it.
 *)
 rule_matcher ::=
-	  WORD      => \0
-	| STRING    => { literal: \0 }
-	| CHARCLASS => { charset: \0 }
+	  WORD      => NonTerm{ name: \0 }
+	| STRING    => Literal{ image: \0 }
+	| CHARCLASS => Matcher{ pattern: \0 }
 
-(* Groups may be 0-1, 0-or-more, or 1-or-more, expressed via Kleene symbols.
-*)
+(* Groups may be 0-1, 0-or-more, or 1-or-more, expressed via Kleene symbols. *)
 kleene_mod ::= [?*+] => \0
 
 (* A word may contain any alphanumeric characters but must begin with a letter
@@ -199,12 +196,12 @@ how to construct the dictionary.  It may contain an expansion rule, this assumes
 the referred item being expanded is also a postproc_dict.  Likewise for lists.
 A trailing comma after the last element is optional but allowed.
 *)
-postproc_dict ::= "{" _ postproc_keyvals _ ","? _ "}" => { proj_dict: \2 }
+postproc_dict ::= word _ "{" _ postproc_keyvals _ ","? _ "}" => project_dict{ \2 }
 
 postproc_keyvals ::= postproc_kv
 postproc_keyvals ::= postproc_keyvals _ "," _ postproc_kv => [ \0..., \4 ]
 
 (* The expand here is the same AST as used for lists; its structural context
 indicates the type of the element expected for the reference being expanded. *)
-postproc_kv ::= word _ ":" _ postproc_atom => [ \0, \4 ]
+postproc_kv ::= word _ ":" _ postproc_atom => keyval{ \0, \4 }
 postproc_kv ::= postproc_expand => \0

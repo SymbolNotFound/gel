@@ -25,15 +25,19 @@ matching an optional space and matching at-least-one spacing.  The value for
 matched spacing is ignored, such that the propagated list only contains comment
 nodes, effectively discarding any spacing (including newlines). *)
 
-_ ::= __? => [ \0... ]
+_ ::= __?
 
 __ ::= __? SPACING => [ \0... ]
-     | __? COMMENT => [ \0..., Comment{ text: \1 } ]
+     | __? COMMENT => [ \0..., Comment{text: \1} ]
+
+(* Variations on this are possible, such as requiring at least one newline. *)
+
 
 SPACING ::= /\s+/m
 
-(* Comment parsing is a little more involved, but still relatively shallow
-compared to other production rules.  We are able to capture it as a token.
+(* Spacing is straightforward with the above pattern.  Comment parsing is a
+little more involved, but still relatively shallow compared to other production
+rules.  We are able to capture it with the following pattern. *)
 
 COMMENT ::= /\(\*([^*]+|\*+[^)])*\*+\)/m => \1
 
@@ -51,79 +55,91 @@ production rules, whereby \0 refers to the entire pattern, \1 to the first match
 group, \2 the second match group, et cetera.  To make things consistent for
 post-processing, match patterns like this always appear on their own, and any
 postprocessing should always emit a string (or list of bytes equivalent).  The
-grammar restricts this isolation of pattern definitions, but it's feasible the
-grammar could be extended to use positional dependence on inlined patterns (like
-\2.3 for the third match group of the second earley set) but thus far I have not
-seen a need for it. *)
+grammar restricts this isolation of references for pattern definitions, it is
+sufficient to cover all useful cases, and deep references from parents are valid
+if they only refer to the numerical offset (no property names or named groups).
+However, as with state projection, enclosing rules can only select from what is
+exposed by the child rules, otherwise there may be ambiguity w.r.t. references.
+*)
 
 (* Tokens may also be represented by string literals provided inline within a
 production rule. The lexer will be given a temporary token with a name that
-matches its image (e.g. new token type in the following rule is "::=": "::="). 
+equals its image (e.g. a token type is created for `::=` in the following rule).
 In this way a token is defined only once even if it is repeated in other rules,
 and there is no added syntactical baggage for defining Token representations
 explicitly except where terminals would be made clearer by naming them. *)
 
 production ::=
-	  WORD _ "::=" _ pattern_body => Pattern{ name: \0, \4... }
+	  WORD _ "::=" _ pattern_body => Matcher{ name: \0, \4... }
 	| WORD _ "::=" _ rule_body    => Rule{ name: \0, tokens: \4 }
 
-(* This rounds out the definition of the grammar on the whole, and we can now
+(* This rounds out the definition of the grammar at a high level, and we can now
 focus on the phrasing of individual production rules.  One semantic detail, if a
 rule or pattern name is repeated, they are considered multiple alternate paths
-and when they are different kinds (as in token pattern and production rule) the
+and when they are different kinds (as in token matchers, production rules) the
 compiler will hoist the token up as a production rule with appropriate postproc
-to match the typing as a token. *)
+to match its resulting type as a string token. *)
+
 
 (* Grammar rules *)
 (* ------------- *)
 
 (*
-   As mentioned above, a rule body may be just a pattern (indicating a token
-is expected from post-processing transforms as well).
+   As mentioned above, a rule body may be a solitary pattern.  When phrased this
+way, its post-processing captures the pattern and subgroups instead of Earley
+states, allowing versatility in token specification without requiring another
+sublanguage to define them (other than the regex pattern language, of course).
 *)
 pattern_body ::=
     PATTERN => Matcher{ pattern: \0 }
   | PATTERN _ "=>" _ postproc_ref => Matcher{ pattern: \0, post: \4 }
 
 (* The pattern is phrased between forward-slash characters '/' and must occupy
-only one line.
-*)
+only one line. *)
+
 PATTERN ::= /\/(?:\\.|[^\\\n])+?\/m?/
 
 (* Otherwise, a rule body is one or more alternatives,
-each a string, character class or reference to another production rule.
-*)
-rule_body ::= parse_alt
-	| rule_body _ "|" _ parse_alt => [\0..., \4]
+each a string, character class or reference to another production rule. *)
+
+rule_body ::= parse_choice
+	| rule_body _ "|" _ parse_choice => [\0..., \4]
 
 (* Each alternative is either a sequence of token expressions by itself or with
-additional post-processing when the '=>' operator is present.
-*)
-parse_alt ::=
-	  rule_expr => { tokens: \0 }
-	| rule_expr _ "=>" _ postproc => { tokens: \0, post: \4 }
+additional post-processing when the '=>' operator is present. *)
 
-(* Token sequencing is simple concatenation.
-*)
+parse_choice ::=
+	  rule_expr => Choice{ tokens: \0 }
+	| rule_expr _ "=>" _ postproc_atom => Choice{ tokens: \0, post: \4 }
+
+(* Token sequencing is simple concatenation. *)
+
 rule_expr ::= rule_atom
 	| rule_expr _ rule_atom => [\0..., \2]
 
 (* Each token representation may be a matcher or group or special Kleene group.
-*)
+When subgroups are present in a rule, post-processing references for the outer
+rule will consider the entire group as one set (thus a list, as though it were
+a separate rule, which a temporary Grammar entry will be created for) and the
+group's alternatives may each have their own postprocessing to express what gets
+projected from the contents of the sub-expression. *)
+
 rule_atom ::=
-	  rule_matcher => Term{ match: \0 }
-	| rule_matcher kleene_mod => Term{ match: \0, kleene: \1 }
-	| "(" _ rule_expr _ ")" _ kleene_mod? => Subexpr{ match: \2, kleene: \6 }
+	  rule_matcher => \0
+	| rule_matcher kleene_mod => Matcher{ \0..., kleene: \1 }
+	| "(" _ rule_body _ ")" _ kleene_mod? => Expr{ tokens: \2, kleene: \6 }
+  | "[" _ rule_body _ "]" => Expr{ tokens: \2, kleene: "?" }
+  | "{" _ rule_body _ "}" => Expr{ tokens: \2, kleene: "*" }
 
 (* Any word (symbolic name) is a reference to another rule in the grammar.
-There may be a literal string for seldom used tokens such as certain symbols
-and keywords, and the tokenizer will be informed about these and the character
-classes.  Anything needing a regular expression should be defined as a rule by
-itself, especially if a subgroup of the pattern is being projected from it.
-*)
+There may be a literal string for inlining token definitions (including symbols
+and keywords), and the tokenizer will be informed about these and any character
+classes.  Anything needing a regular expression must be defined as a rule by
+itself.  This also enables projecting from a subgroup of the pattern easily. *)
+
 rule_matcher ::=
-	  WORD      => NonTerm{ name: \0 }
-	| STRING    => Literal{ image: \0 }
+	  WORD      => Matcher{ nonterm: \0 }
+	| STRING    => Matcher{ literal: \0 }
 	| CHARCLASS => Matcher{ pattern: \0 }
 
 (* Groups may be 0-1, 0-or-more, or 1-or-more, expressed via Kleene symbols. *)
@@ -132,14 +148,17 @@ kleene_mod ::= [?*+] => \0
 (* A word may contain any alphanumeric characters but must begin with a letter
 or the underscore.  It may even consist of only underscores or only one letter.
 *)
+
 WORD ::= /[A-Z_a-z][A-Z_a-z0-9]*/
 
 (* Capture all characters between double-quotes.
 *)
+
 STRING ::= /"(\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\\n])*"/ => \1
 
 (* Capture a range of characters and character instances within a common class.
 *)
+
 CHARCLASS ::= /\[(?:\\.|[^\\\n])+?\]/
 
 
@@ -155,7 +174,8 @@ If no postprocessing is given, it is equivalent to [ \0, \1, ...] (etc. to fit).
 For pattern tokens, the default is \0; the pattern match as a string not a list.
 *)
 postproc_atom ::=
-    postproc_ref  => \0
+    postproc_prop => \0
+  | postproc_ref  => \0
   | postproc_list => \0
   | postproc_dict => \0
 
@@ -163,7 +183,7 @@ postproc_atom ::=
    The simplest post-processing is a single reference to a positional element.
 In the case of token patterns this is the only valid postprocessing expression.
 *)
-postproc_ref ::= "\\" NUMBER => { proj_atom: \1 }
+postproc_ref ::= "\\" NUMBER => ItemProjection{ ref: \1 }
 
 (*
    Numbers are always positive integers, or zero.  To avoid confusion with octal
@@ -173,35 +193,51 @@ is especially specific about which digit strings are allowed.
 NUMBER ::= /0|[1-9][0-9]*/
 
 (*
+   The projections for post-processing may include references to properties that
+are defined within an object or list defined for the states of the current rule.
+*)
+postproc_prop ::= postproc_ref "." WORD => PropertyGetter{ref: \0, name: \2}
+postproc_prop ::= postproc_prop "." WORD => PropertyGetter{ref: \0, name: \2}
+postproc_prop ::= postproc_ref "." NUMBER => PropertyGetter{ref: \0, name: \2}
+postproc_prop ::= postproc_prop "." NUMBER => PropertyGetter{ref: \0, name: \2}
+
+(*
    Post-processing may construct a list or a dictionary from the spec given,
 with a list able to expand the contents of another list (and a sufficiently
 good compiler will see this for the append-to-slice operation that it is...).
 *)
-postproc_list ::= "[" _ postproc_items _ "]" => { proj_list: \2 }
+postproc_list ::= "[" _ postproc_items _ ","? _ "]"
+  => ListProjection{ values: \2 }
 
 postproc_items ::= postproc_item
-postproc_items ::= postproc_items _ "," _ postproc_item => [ \0..., \4 ]
-
-postproc_item ::= postproc_ref => \0
-                | postproc_expand => \0
-                | postproc_list => \0
-                | postproc_dict => \0
-
-postproc_expand ::= postproc_ref "..." => { expand: \0 }
+postproc_items ::= postproc_items _ "," _ postproc_item => [\0..., \4]
 
 (*
-A dict may have any name for its key. Its value may be a literal or any valid
-postproc value.  It is an association list of (key, value) pairs which describe
-how to construct the dictionary.  It may contain an expansion rule, this assumes
-the referred item being expanded is also a postproc_dict.  Likewise for lists.
-A trailing comma after the last element is optional but allowed.
+   Each item in the list may be a reference, a property of a reference,
+an embedded structure like a list or dict (explicitly defined or lifted from
+the reference to a state in the associated rule).  It may also be an expansion
+for the elements of a list at the indicated reference.  An AST validation pass
+is needed to confirm that the type of the referred rule atom is indeed a list.
 *)
-postproc_dict ::= word _ "{" _ postproc_keyvals _ ","? _ "}" => project_dict{ \2 }
+postproc_item ::= postproc_atom => \0
+                | postproc_ref "..." => ExpandList{ ref: \0.ref }
 
+(*
+A record may have any name for its key. Its value may be a literal or any valid
+postproc value.  It is an association list of (key, value) pairs describing how
+to construct the attributes map.  It may contain an expansion rule, this assumes
+the referred item being expanded is a postproc_dict that unifies with this one.
+See postproc_prop for property references of first-order state references.
+A trailing comma after the last element is allowed, but not required.
+*)
+postproc_dict ::= word "{" _ postproc_keyvals _ ","? _ "}"
+  => RecordProjection{ name: \0, attrs: \3 }
+
+(* Multiple attributes are separated by a comma. *)
 postproc_keyvals ::= postproc_kv
-postproc_keyvals ::= postproc_keyvals _ "," _ postproc_kv => [ \0..., \4 ]
+postproc_keyvals ::= postproc_keyvals _ "," _ postproc_kv => [\0..., \4]
 
-(* The expand here is the same AST as used for lists; its structural context
-indicates the type of the element expected for the reference being expanded. *)
-postproc_kv ::= word _ ":" _ postproc_atom => keyval{ \0, \4 }
-postproc_kv ::= postproc_expand => \0
+(* Each key, value is colon-separated.  A reference expansion also needs to be
+the same name/type but that is checked in an AST validation pass. *)
+postproc_kv ::= word _ ":" _ postproc_atom => KeyValue{ "key": \0, "value": \4 }
+postproc_kv ::= postproc_ref "..." => ExpandRecord{ ref: \0.ref }

@@ -5,63 +5,55 @@ type PostProcessing interface {
 }
 
 func (Nothing) isPostProc()          {}
-func (Ident) isPostProc()            {}
+func (Identity) isPostProc()         {}
 func (StringProjection) isPostProc() {}
+func (ItemProjection) isPostProc()   {}
 func (ListProjection) isPostProc()   {}
-func (DictProjection) isPostProc()   {}
+func (RecordProjection) isPostProc() {}
+func (PropertyGetter) isPostProc()   {}
 
 type Nothing struct{}
 
-type Ident struct{}
+type Identity struct{}
 
 type StringProjection struct {
 	value string
+}
+
+type ItemProjection struct {
+	ref int
 }
 
 type ListProjection struct {
 	values []PostProcessing
 }
 
-func projlist(values ...PostProcessing) ListProjection {
-	return ListProjection{
-		values: values,
-	}
+type ExpandList struct {
+	ItemProjection
 }
 
-type DictProjection struct {
+type RecordProjection struct {
 	name  string
 	attrs []attr
 }
 
 type attr interface {
-	isDictKV()
+	isAttribute()
 }
 
-type keyval struct {
+type KeyValue struct {
 	key   string
 	value PostProcessing
 }
 
-func (keyval) isDictKV() {}
+func (KeyValue) isAttribute()     {}
+func (ExpandRecord) isAttribute() {}
 
-func projdict(name string, attrs ...attr) DictProjection {
-	return DictProjection{
-		name:  name,
-		attrs: attrs,
-	}
+type ExpandRecord struct {
+	ItemProjection
 }
 
-type ItemProjection struct {
-	Reference int
+type PropertyGetter struct {
+	ItemProjection
+	name string
 }
-
-func (ItemProjection) isPostProc() {}
-
-type ref = ItemProjection
-
-type Expand struct {
-	Reference int
-}
-
-func (Expand) isPostProc() {}
-func (Expand) isDictKV()   {}

@@ -5,7 +5,6 @@ type PostProcessing interface {
 }
 
 func (Nothing) isPostProc()          {}
-func (Identity) isPostProc()         {}
 func (StringProjection) isPostProc() {}
 func (ItemProjection) isPostProc()   {}
 func (ListProjection) isPostProc()   {}
@@ -13,8 +12,6 @@ func (RecordProjection) isPostProc() {}
 func (PropertyGetter) isPostProc()   {}
 
 type Nothing struct{}
-
-type Identity struct{}
 
 type StringProjection struct {
 	value string

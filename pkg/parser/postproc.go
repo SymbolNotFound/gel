@@ -29,6 +29,11 @@ type ExpandList struct {
 	ItemProjection
 }
 
+type ElementGetter struct {
+	ItemProjection
+	index int
+}
+
 type RecordProjection struct {
 	name  string
 	attrs []attr

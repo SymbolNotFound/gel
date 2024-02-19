@@ -1,9 +1,11 @@
 package parser
 
-import "github.com/SymbolNotFound/ggdl/pkg/lexer"
+type GrammarSpec struct {
+	rules []EarleyRule
+}
 
 func NewGrammar() Grammar {
-	return &grammar{nil, []EarleyRule{}, ""}
+	return &grammar{[]EarleyRule{}, ""}
 }
 
 type Grammar interface {
@@ -18,8 +20,36 @@ func (g *grammar) AddRule(rule EarleyRule) {
 }
 
 type grammar struct {
-	lexer lexer.TokenReader
 	rules []EarleyRule
 	start string
 }
 
+type EarleyRule struct {
+	name    string
+	choices []Choice
+}
+	
+type Choice struct {
+	symbols []EarleySymbol
+	arrange PostProcessing
+}
+
+type EarleySymbol interface {
+	isSymbol()
+}
+
+func (LiteralMatcher) isSymbol() {}
+func (PatternMatcher) isSymbol() {}
+func (RuleMatcher)    isSymbol() {}
+
+type LiteralMatcher struct {
+	image string
+}
+
+type PatternMatcher struct {
+	pattern string
+}
+
+type RuleMatcher struct {
+	name string
+}

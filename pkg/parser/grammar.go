@@ -1,7 +1,13 @@
 package parser
 
 type GrammarSpec struct {
-	rules []EarleyRule
+	rules []RuleSpec
+}
+
+type RuleSpec struct {
+	name string
+	choice Choice
+	arrange PostProcessing
 }
 
 func NewGrammar() Grammar {

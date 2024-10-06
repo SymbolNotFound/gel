@@ -1,8 +1,8 @@
-# GGDL (General Game Description Language)
+# GEL (Goal Expression Language)
 
 In this repo are the parser and compiler implementations:
 
-* `src/` GGDL implemented entirely in core golang, with no external dependencies.
+* `src/` GEL implemented entirely in core golang, with no external dependencies.
 Other repositories within this organization depend on the parsing and compiling
 into a more fluent intermediate representation suitable for traversing and value
 unifying on.
@@ -11,7 +11,7 @@ unifying on.
 use the golang library unless prefixed by `ts-`.  Most commands for typescript
 build/test/eval are done using `npm build` or `npm install` from within `ts/`.
 
-## GGDL and its relation to other General Game Playing environments
+## GEL and its relation to other General Game Playing environments
 
 This project builds on work done in academia in the field of
  General Game Playing,
@@ -28,7 +28,7 @@ as C++ or Java, so an AI reading the rules has an incomplete picture of what
 makes up the game definition.
 
 This project, and the related projects for hosting a game-playing service, aim
-to build fully logical definitions.  There is part of the GGDL language which
+to build fully logical definitions.  There is part of the GEL language which
 depends on an externality, and that is the user interface for gathering user
 inputs and distributing move and state updates to the players.  These borrow
 from concepts expressed in GDL games and in the ontology of Ludii's ludemes,
@@ -50,30 +50,30 @@ provides a sound basis for separating concerns -- GM logic and client logic and
 game data schema and player data schema are clearly defined responsibilities of
 individual components of the system.
 
-## GGDL and related repositories
+## GEL and related repositories
 
 
-* **ggdl**: (this repo)
-A parser and compiler for .ggd source files (GGDL's file type), a superset of
+* **gel**: (this repo)
+A parser and compiler for .ggd source files (GEL's file type), a superset of
 GDL and compatible with several of the language's variants.  It can compile
-GGDL down to GDL-II (or, if necessary, rtGDL) and will compile to GDL-I if able.
+GEL down to GDL-II (or, if necessary, rtGDL) and will compile to GDL-I if able.
 Contains a parser/compiler for both golang and TypeScript, developed in tandem.
 This repo has github actions for compiling the parser and benchmarking its parse
 times for priority operations (e.g. ground relations used in player moves).
 
-* **ggdl-api**: the common protocols and data types that all players (human and
+* **gel-api**: the common protocols and data types that all players (human and
 AI), as well as game master and lobby interfaces, use to interact.  These are
-defined as a separate repo because some environments do not need an entire GGDL 
+defined as a separate repo because some environments do not need an entire GEL 
 compiler to play (e.g., the game clients that have been code generated from
-rules).  This is not to say that clients should not depend on `ggdl`, but that
+rules).  This is not to say that clients should not depend on `gel`, but that
 there are benefits to building clients that only need to depend on the API.
 This repo has no github actions, but has hooks into build and test that check
 for internal consistency.
 
-* **ggdl-gm**: a golang service adhering to the Game Manager for hosting games.
+* **ggp-gm**: a golang service adhering to the Game Manager for hosting games.
 It coordinates the simultaneous play of moves, shares game updates with players
 and spectators, and validates legal play adhering to the game's rules.  Though
-it depends on `ggdl/go` so that it can arbitrate any bespoke games, some of the
+it depends on `gel` so that it can arbitrate any bespoke games, some of the
 game rules may be a compiled into go plugins for native compilation into Go,
 compiled into an intermediate notation that the service can snapshot and read
 back in when play resumes.
@@ -83,7 +83,7 @@ This repo has github actions for staging the GM to be released.
 recent matches.  Is defined in a game-agnostic way and compatible with OpenAuth
 ID servers to provide ACLs across any arbitrary game definition or game state
 representation.  Clients do not need to know how the metadata and replay data
-are stored, only how to retrieve and parse it as described in `ggdl-api`.  This
+are stored, only how to retrieve and parse it as described in `gel-api`.  This
 is the reference implementation for database-related operations in the API.
 
 * **ggp-games**: a private repository containing the game rulesets and backup
@@ -97,7 +97,7 @@ released yet.
 
 * **ggp-site**: web site frontend for ggpdojo.com and OAuth callback receiver.
 It exposes the interface for viewing current games, creating new ones or joining
-a lobby invitation.  Thus it only needs to depend on `ggdl-api` and `ggp-db`, it
+a lobby invitation.  Thus it only needs to depend on `gel-api` and `ggp-db`, it
 is the GM's responsibility to arbitrate game logic decisions.  There is also a
 dependency on `vue-client` because ggpdojo.com is a convenient location to
 deploy it from, but that dependency is at deployment time, not during build.
@@ -110,10 +110,10 @@ This repo also has the FrontEnd server's github actions for staging a release.
 
 ```mermaid
 graph LR;
-    ggdl-->ggp-db;
-    ggdl-->ggdl-gm;
+    gel-->ggp-db;
+    gel-->ggp-gm;
     ggp-db--->ggp-site;
-    ggdl-api-->ggdl-gm;
+    gel-api-->ggp-gm;
     ggp-games--->ggp-site
 ```
 

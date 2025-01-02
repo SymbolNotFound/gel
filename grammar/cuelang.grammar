@@ -1,0 +1,191 @@
+// CUE language in an EBNF.
+// based on documentation at https://cuelang.org/docs/reference/spec/
+//
+// assumes a lexer that with the following Unicode character classes:
+//   newline (U+000A)
+//   unicode_char (any unicode code point except newline)
+//   unicode_letter (unicode classified as "Letter")
+//   unicode_digit (unicode classified as "Number, decimal digit")
+
+letter        = unicode_letter | "_" | "$" .
+decimal_digit = "0" … "9" .
+binary_digit  = "0" … "1" .
+octal_digit   = "0" … "7" .
+hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
+
+identifier  = [ "#" | "_#" ] letter { letter | unicode_digit } .
+
+// Keywords
+null
+true
+false
+package
+import
+for
+in
+if
+let
+
+// Operators & punctuation
++     &&    ==    <     =     (     )
+-     ||    !=    >     :     {     }
+*     &     =~    <=    ?     [     ]     ,
+/     |     !~    >=    !     _|_   ...   .
+
+// Numeric literals
+int_lit     = decimal_lit | si_lit | octal_lit | binary_lit | hex_lit .
+decimal_lit = "0" | ( "1" … "9" ) { [ "_" ] decimal_digit } .
+decimals    = decimal_digit { [ "_" ] decimal_digit } .
+si_it       = decimals [ "." decimals ] multiplier |
+              "." decimals  multiplier .
+binary_lit  = "0b" binary_digit { [ "_" ] binary_digit } .
+hex_lit     = "0" ( "x" | "X" ) hex_digit { [ "_" ] hex_digit } .
+octal_lit   = "0o" octal_digit { [ "_" ] octal_digit } .
+multiplier  = ( "K" | "M" | "G" | "T" | "P" ) [ "i" ]
+
+float_lit   = decimals "." [ decimals ] [ exponent ] |
+              decimals exponent |
+              "." decimals [ exponent ].
+exponent    = ( "e" | "E" ) [ "+" | "-" ] decimals .
+
+// Neither a float_lit nor an si_lit may appear after a token that is:
+//  * an identifier, keyword, or bottom
+//  * a number or string literal, including an interpolation
+//  * one of the characters ), ], }, ?, or ..
+
+// Strings and byte sequences
+escaped_char     = `\` { `#` } ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | "/" | `\` | "'" | `"` ) .
+byte_value       = octal_byte_value | hex_byte_value .
+octal_byte_value = `\` { `#` } octal_digit octal_digit octal_digit .
+hex_byte_value   = `\` { `#` } "x" hex_digit hex_digit .
+little_u_value   = `\` { `#` } "u" hex_digit hex_digit hex_digit hex_digit .
+big_u_value      = `\` { `#` } "U" hex_digit hex_digit hex_digit hex_digit
+                           hex_digit hex_digit hex_digit hex_digit .
+unicode_value    = unicode_char | little_u_value | big_u_value | escaped_char .
+interpolation    = "\" { `#` } "(" Expression ")" .
+
+string_lit       = simple_string_lit |
+                   multiline_string_lit |
+                   simple_bytes_lit |
+                   multiline_bytes_lit |
+                   `#` string_lit `#` .
+
+simple_string_lit    = `"` { unicode_value | interpolation } `"` .
+simple_bytes_lit     = `'` { unicode_value | interpolation | byte_value } `'` .
+multiline_string_lit = `"""` newline
+                             { unicode_value | interpolation | newline }
+                             newline `"""` .
+multiline_bytes_lit  = "'''" newline
+                             { unicode_value | interpolation | byte_value | newline }
+                             newline "'''" .
+
+// carriage return characters `\r` are discarded from inside the string value.
+
+// values, structs
+PrimaryExpr =
+	Operand |
+	PrimaryExpr Selector |
+	PrimaryExpr Index |
+	PrimaryExpr Arguments .
+
+Selector       = "." (identifier | simple_string_lit) .
+Index          = "[" Expression "]" .
+Argument       = Expression .
+Arguments      = "(" [ ( Argument { "," Argument } ) [ "," ] ] ")" .
+
+StructLit       = "{" { Declaration "," } "}" .
+Declaration     = Field | Ellipsis | Embedding | LetClause | attribute .
+Ellipsis        = "..." [ Expression ] .
+Embedding       = Comprehension | AliasExpr .
+Field           = Label ":" { Label ":" } AliasExpr { attribute } .
+Label           = [ identifier "=" ] LabelExpr .
+LabelExpr       = LabelName [ "?" | "!" ] | "[" AliasExpr "]" .
+LabelName       = identifier | simple_string_lit | "(" AliasExpr ")" .
+
+attribute       = "@" identifier "(" attr_tokens ")" .
+attr_tokens     = { attr_token |
+                    "(" attr_tokens ")" |
+                    "[" attr_tokens "]" |
+                    "{" attr_tokens "}" } .
+attr_token      = /* any token except '(', ')', '[', ']', '{', or '}' */
+
+ListLit       = "[" [ ElementList [ "," ] ] "]" .
+ElementList   = Ellipsis | Embedding { "," Embedding } [ "," Ellipsis ] .
+
+// Predeclared identifiers (built-ins)
+len close and or
+div mod quo rem
+
+// Types
+null      The null type and value
+bool      All boolean values
+int       All integral numbers
+float     All decimal floating-point numbers
+string    Any valid UTF-8 sequence
+bytes     Any valid byte sequence
+
+// Derived   Value
+//|--------|-------------------
+// number    int | float
+// uint      >=0
+// uint8     >=0 & <=255
+// int8      >=-128 & <=127
+// uint16    >=0 & <=65535
+// int16     >=-32_768 & <=32_767
+// rune      >=0 & <=0x10FFFF
+// uint32    >=0 & <=4_294_967_295
+// int32     >=-2_147_483_648 & <=2_147_483_647
+// uint64    >=0 & <=18_446_744_073_709_551_615
+// int64     >=-9_223_372_036_854_775_808 & <=9_223_372_036_854_775_807
+// uint128   >=0 & <=340_282_366_920_938_463_463_374_607_431_768_211_455
+// int128    >=-170_141_183_460_469_231_731_687_303_715_884_105_728 &
+//            <=170_141_183_460_469_231_731_687_303_715_884_105_727
+// float32   >=-3.40282346638528859811704183484516925440e+38 &
+//           <=3.40282346638528859811704183484516925440e+38
+// float64   >=-1.797693134862315708145274237317043567981e+308 &
+//           <=1.797693134862315708145274237317043567981e+308
+
+Operand     = Literal | OperandName | "(" Expression ")" .
+Literal     = BasicLit | ListLit | StructLit .
+BasicLit    = int_lit | float_lit | string_lit |
+              null_lit | bool_lit | bottom_lit .
+OperandName = identifier | QualifiedIdent .
+QualifiedIdent = PackageName "." identifier .
+
+Expression = UnaryExpr | Expression binary_op Expression .
+UnaryExpr  = PrimaryExpr | unary_op UnaryExpr .
+
+binary_op  = "|" | "&" | "||" | "&&" | "==" | rel_op | add_op | mul_op  .
+rel_op     = "!=" | "<" | "<=" | ">" | ">=" | "=~" | "!~" .
+add_op     = "+" | "-" .
+mul_op     = "*" | "/" .
+unary_op   = "+" | "-" | "!" | "*" | rel_op .
+
+// Precedence    Operator
+//|------------|---------------------------------
+//    7 (strongest) *  /
+//    6             +  -
+//    5             ==  !=  <  <=  >  >= =~ !~
+//    4             &&
+//    3             ||
+//    2             &
+//    1             |
+
+// Comprehensions
+Comprehension       = Clauses StructLit .
+
+Clauses             = StartClause { [ "," ] Clause } .
+StartClause         = ForClause | GuardClause .
+Clause              = StartClause | LetClause .
+ForClause           = "for" identifier [ "," identifier ] "in" Expression .
+GuardClause         = "if" Expression .
+LetClause           = "let" identifier "=" Expression .
+
+// Packages
+PackageClause  = "package" PackageName .
+PackageName    = identifier .
+
+ImportDecl       = "import" ( ImportSpec | "(" { ImportSpec "," } ")" ) .
+ImportSpec       = [ PackageName ] ImportPath .
+ImportLocation   = { unicode_value } .
+ImportPath       = `"` ImportLocation [ ":" identifier ] `"` .

@@ -1,4 +1,4 @@
-# GGDC - General Game Description Compiler
+# GELC - Goal Expression Language Compiler
 
 At the moment, this only emits the tokenized/parsed version of a GDL (HRF) input
 from stdin to stdout.  The goal is for this to be able to translate from the GDL
